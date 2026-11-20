@@ -7,7 +7,6 @@
 #include "pros/motors.h"
 #include "screen.h"
 #include "autons.h"
-#include "intake.h"
 #include <array>
 #include <atomic>
 #include <cstdio>
@@ -20,22 +19,22 @@ struct AutonOption {
     void (*run)();
 };
 
-// Change this table to change auton count and mapping for the potentiometer selector.
-const std::array<AutonOption, 6> AUTONS = {{
-    {"Left", left},
-    {"Right", right},
-    {"Skills", skills96},
-    {"Five Inch", fiveInch},
-	{"Test", test},
-	{"Solo AWP", soloAWP}
-}};
+// // Change this table to change auton count and mapping for the potentiometer selector.
+// const std::array<AutonOption, 6> AUTONS = {{
+//     {"Left", left},
+//     {"Right", right},
+//     {"Skills", skills96},
+//     {"Five Inch", fiveInch},
+// 	{"Test", test},
+// 	{"Solo AWP", soloAWP}
+// }};
 
-std::vector<std::string> autonNamesFromTable() {
-    std::vector<std::string> names;
-    names.reserve(AUTONS.size());
-    for (const auto& auton : AUTONS) names.emplace_back(auton.name);
-    return names;
-}
+// std::vector<std::string> autonNamesFromTable() {
+//     std::vector<std::string> names;
+//     names.reserve(AUTONS.size());
+//     for (const auto& auton : AUTONS) names.emplace_back(auton.name);
+//     return names;
+// }
 
 std::atomic_bool mclPaused{false};
 
@@ -47,23 +46,15 @@ void setMCLPaused(bool pause) {
 } // namespace
 
 
-int turn_divider = 1;
-int right_voltage = 0;
-int left_voltage = 0;
-int bottom_intake_voltage = 0;
-int top_intake_voltage = 0;
-bool just_lowered_hood = false;
+// int turn_divider = 1;
+// int right_voltage = 0;
+// int left_voltage = 0;
+// int top_intake_voltage = 0;
+// bool just_lowered_hood = false;
 
-bool removerActivated = false;
-bool wingActivated = false;
-bool hoodActivated = false;
-bool scraperActivated = false;
 
-// flingBlue = false;
-bool removerPressedLast = false;
-bool hoodPressedLast = false;
-bool scraperPressedLast = false;
-bool wingPressedLast = false;
+
+
 /**
  * Runs initialization code. This occurs as soon as the program is started.
  *
@@ -71,7 +62,6 @@ bool wingPressedLast = false;
  * to keep execution time for this mode under a few seconds.
  */
 void initialize() {
-	vertical_rotation.reset();
 	horizontal_rotation.reset();
 	// pros::lcd::initialize();
     chassis.calibrate();
@@ -81,7 +71,6 @@ void initialize() {
 	// controller.set_text(0, 0, "Blub Blub");
 	// sc.setAutonNames(autonNamesFromTable());
 	sc.initialize();
-	intake.initialize();
 
     static pros::Task screen_task([&]() {
         while (true) {
@@ -149,8 +138,9 @@ void autonomous() {
 		left_motor_group.set_brake_mode(MOTOR_BRAKE_HOLD);
 		right_motor_group.set_brake_mode(MOTOR_BRAKE_HOLD);
     setMCLPaused(false);
-	soloAWP();
-    // int idx = sc.selectedAuton;
+
+
+	// int idx = sc.selectedAuton;
     // if (idx < 0 || idx >= static_cast<int>(AUTONS.size())) idx = 0;
     // if (AUTONS[idx].run != nullptr) AUTONS[idx].run();
 }
@@ -169,114 +159,109 @@ void autonomous() {
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
+
+ bool wedgePressedLast = false; 
+bool clawPressedLast = false;
+bool clawOpen = false;
+bool wedgeDown = false; 
 void opcontrol() {
-	// sc.state = RobotState::DRIVER;
-	// sc.hideSelector();
-
-	// right9ball();	
-	// test();
-	// skills();
-	// chassis.setPose(-48, -48, 0);
-	
-
-	//right();
-	wing.set_value(true);
-	while (true) {
-
-		// if (controller.get_digital_new_release(DIGITAL_R1) || controller.get_digital_new_release(DIGITAL_R2) || controller.get_digital_new_release(DIGITAL_L1) || controller.get_digital_new_release(DIGITAL_L2)) {
-		if (controller.get_digital_new_release(DIGITAL_L1) || controller.get_digital_new_release(DIGITAL_L2) || controller.get_digital_new_release(DIGITAL_R1) || controller.get_digital_new_release(DIGITAL_R2)) {
-			bottom_intake_voltage = 0;
-			top_intake_voltage = 0;
-			flappier.set_value(true);
-			flappy.set_value(false);
-		}
-
-		// Intake (top)
-		if (controller.get_digital_new_press(DIGITAL_L1)) {
-			flappier.set_value(false);
-			flappy.set_value(false);
-			bottom_intake_voltage = 127;
-			top_intake_voltage = 127;
-		}
-
-		if (controller.get_digital_new_press(DIGITAL_L1)) {
-        flappy.set_value(true);
-        flappier.set_value(true);
-				bottom_intake_voltage = 127;
-				top_intake_voltage = 127;
-		}
-
-		//storage in
-		if (controller.get_digital_new_press(DIGITAL_R1)) {
-			flappier.set_value(true);
-			flappy.set_value(false);
-			bottom_intake_voltage = 127;
-			top_intake_voltage = 127;
-		}
-
-		// Outtake (Bottom)
-		if (controller.get_digital_new_press(DIGITAL_R2)) {
-			bottom_intake_voltage = -127;
-			top_intake_voltage = -127;
-			flappy.set_value(false);
-    	flappier.set_value(true);
-		}
-
-		// Scraper (toggle)
-		bool scraperPressedNow =
-			controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP);
-
-		if (scraperPressedNow && !scraperPressedLast) {
-		// Toggle scraper
-		scraperActivated = !scraperActivated;
-		scraper.set_value(scraperActivated);
-		}
-
-		scraperPressedLast = scraperPressedNow;
-
-		//descore
-		bool removerPressedNow =
-			controller.get_digital(pros::E_CONTROLLER_DIGITAL_B);
-
-		if (removerPressedNow && !removerPressedLast) {
-		// Toggle remover
-		removerActivated = !removerActivated;
-		wing.set_value(removerActivated);
-		}
-
-		//middle goal
-		if (controller.get_digital_new_press(DIGITAL_L2)) {
-			intake.score(127, true);
-			// flappy.set_value(true);
-			// flappier.set_value(true);
-			// bottom_intake_voltage = 127;
-			// top_intake_voltage = 127;
-		}
 
 
-        std::string currents = "Voltage Left: " + std::to_string(left_voltage) + "\n";
-		currents += "Voltage Right: " + std::to_string(right_voltage) + "\n";
+	left_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
+    right_motor_group.set_brake_mode(pros::E_MOTOR_BRAKE_COAST);
 
-		
 
-		// int dir = controller.get_analog(ANALOG_LEFT_Y);
-		int turn = controller.get_analog(ANALOG_RIGHT_X) * 0.90;
-		int volt = controller.get_analog(ANALOG_LEFT_Y);
-		// turn = turn < 15 ? 0 : turn; // Deadzone for turning
+    while (true) {
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X) ;
 
-		currents += "Turn: " + std::to_string(turn) + "\n";
-		currents += "Volt: " + std::to_string(volt) + "\n";
-		// sc.showInfoLabel(currents.c_str());
+        chassis.arcade(leftY, rightX);
 
-		// chassis.arcade(volt, turn, false, 0.75);
-		chassis.arcade(volt, turn, false, 0.75);
-		// left_motor_group.move(volt + turn);
-		// right_motor_group.move(volt - turn);
 
-		
-		bottom_intake.move(bottom_intake_voltage);
-		top_intake.move(top_intake_voltage);
 
-		pros::delay(20);
-	}
+        bool cascadeUp = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+        bool cascadeDown = controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+        bool toggleReverse = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
+
+
+        bool wedgePressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_RIGHT);       
+
+        
+        if (wedgePressed && !wedgePressedLast) {
+
+            if (wedgeDown) {
+                wedge.set_value(true);
+
+
+            }
+            else {
+               wedge.set_value(false);
+            }
+
+            wedgeDown = !wedgeDown;
+        }        
+
+        wedgePressedLast = wedgePressed;
+
+
+
+
+if (cascadeUp) {
+    cascade.move(100);
 }
+else if (cascadeDown) {
+    cascade.move(-100);
+}
+else {
+    cascade.move(0);
+}
+
+if (cascadeUp) {
+    toggle.move(127);
+}
+else if (cascadeDown || toggleReverse) {
+    toggle.move(-127);
+}
+else {
+    toggle.move(0);
+}
+
+       bool clawPressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
+       
+
+        
+        if (clawPressed && !clawPressedLast) {
+
+            if (clawOpen) {
+                clawy.set_value(true);
+
+
+            }
+            else {
+               clawy.set_value(false);
+            }
+
+            clawOpen = !clawOpen;
+        }        
+
+        clawPressedLast = clawPressed;
+        
+
+    
+
+    //   bool togglePressed = controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
+    //    // double current = roller.get_current_draw();
+
+        
+    //    if (togglePressed) {
+    //     toggle.move(127); 
+    //    } 
+    //    else {
+    //     toggle.move(0); 
+    //    }
+
+    //     pros::delay(20);
+    // }
+
+}
+	}
